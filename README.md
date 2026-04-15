@@ -2,20 +2,14 @@
  A beautiful and easy-to-use Minecraft server manager built with Python and GTK4/libadwaita.
 
 ### Main window
-
-<p align="center">
-  <img src="assets/main_window.png" width="200" alt="Grassy Logo">
-</p>
+![Main Window][assets/main_window.png]
 
 ### Settings
-<p align="center">
-  <img src="assets/settings.png" width="200" alt="Grassy Logo">
-</p>
+![Settings][assets/settings.png]
 
 ### Server Settings
-<p align="center">
-  <img src="assets/server_settings.png" width="200" alt="Grassy Logo">
-</p>
+![Server Settings][assets/server_settings.png]
+
 ### Dependencies
 Arch:
 
@@ -42,3 +36,15 @@ cd grassy
 
 make run
 ```
+
+### Installing
+
+
+```bash
+git clone https://github.com/mhashirshahzad/grassy
+
+cd grassy
+
+make install
+```
+

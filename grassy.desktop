@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Grassy
+Comment=Minecraft Server Manager
+Exec=/usr/local/bin/grassy
+Icon=grassy
+Terminal=false
+Categories=Game;System;
