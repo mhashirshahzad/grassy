@@ -92,10 +92,17 @@ class GrassyWindow(Adw.ApplicationWindow):
             return
         
         # Create a card for each server folder
-        for folder in sorted(server_folders):
+        for i, folder in enumerate(sorted(server_folders)):
             card = ServerCard(folder, on_server_changed=self.refresh_server_list)
             self.server_list.append(card)
     
+            # Add separator after each card except the last one
+            if i < len(server_folders) - 1:
+                separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+                separator.set_margin_start(12)
+                separator.set_margin_end(12)
+                self.server_list.append(separator)    
+
     def show_empty_state(self, servers_dir):
         """Show message when no servers found"""
         info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
