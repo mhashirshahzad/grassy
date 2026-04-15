@@ -26,6 +26,8 @@ setup:
 	@echo -e "$(YELLOW)Installing dependencies...$(NC)"
 	$(PIP) install --upgrade pip
 	$(PIP) install pygobject 
+	@echo -e "$(YELLOW)Installing LSP...$(NC)"
+	$(PIP) install python-lsp-server
 	@echo -e "$(GREEN)✅ Setup complete! Run 'make run'$(NC)"
 
 upgrade:
