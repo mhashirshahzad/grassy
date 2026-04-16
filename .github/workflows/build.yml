@@ -87,16 +87,9 @@ jobs:
           body: |
             ## Grassy v${{ steps.version.outputs.VERSION }}
             
-            ### Installation:
-            ```bash
-            # Download the binary
-            wget https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.VERSION }}/grassy
-            
-            # Make it executable
-            chmod +x grassy
-            
-            # Optional: move to PATH
-            sudo mv grassy /usr/local/bin/
-            
-            # Run
-            grassy
+            See [README](https://github.com/${{ github.repository }}#readme) for installation instructions.
+          draft: false
+          prerelease: false
+          make_latest: true
+          files: |
+            release/grassy

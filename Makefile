@@ -2,7 +2,7 @@ VENV = venv
 PYTHON = $(VENV)/bin/python3
 PIP = $(VENV)/bin/pip3
 BINARY_NAME = grassy
-BINARY_VERSION = 1.0.0
+BINARY_VERSION = 1.0.1
 INSTALL_PATH = /usr/local/bin
 DESKTOP_PATH = $(HOME)/.local/share/applications
 
