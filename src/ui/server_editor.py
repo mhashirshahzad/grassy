@@ -2,6 +2,8 @@ from gi.repository import Adw, Gtk
 from pathlib import Path
 from ui.java_editor import JavaEditorWindow
 from datetime import datetime
+import subprocess
+import os
 
 
 class ServerEditorWindow(Adw.Window):
@@ -48,6 +50,7 @@ class ServerEditorWindow(Adw.Window):
         self.load_properties()
 
         self.create_java_button()
+        self.create_mods_button()  # NEW: Add mods button
         self.create_basic_settings()
         self.create_gameplay_settings()
         self.create_network_settings()
@@ -135,6 +138,67 @@ class ServerEditorWindow(Adw.Window):
 
     def on_java_settings_clicked(self, button):
         JavaEditorWindow(parent=self, server_folder=self.server_folder).present()
+
+    # ----------------------------
+    # MODS FOLDER
+    # ----------------------------
+    def create_mods_button(self):
+        """Create a button to open the mods folder if it exists"""
+        self.mods_folder = self.server_folder / "mods"
+        
+        # Only show if mods folder exists
+        if not self.mods_folder.exists() or not self.mods_folder.is_dir():
+            return
+        
+        group = Adw.PreferencesGroup(title="Mods Management")
+        rows = []
+
+        row = Adw.ActionRow(title="Open Mods Folder")
+        row.set_subtitle("Manage your installed mods")
+        
+        # Count mods if any
+        mod_count = len(list(self.mods_folder.glob("*.jar")))
+        if mod_count > 0:
+            row.set_subtitle(f"{mod_count} mod(s) installed - Click to open folder")
+        else:
+            row.set_subtitle("No mods installed - Click to open folder")
+
+        btn = Gtk.Button(label="Open Folder")
+        btn.add_css_class("suggested-action")
+        btn.connect("clicked", self.on_open_mods_clicked)
+
+        row.add_suffix(btn)
+        group.add(row)
+
+        self.preferences_page.add(group)
+
+        self.add_row(rows, row, "open mods folder", "mods management", "mods")
+        self.register_group(group, rows)
+
+    def on_open_mods_clicked(self, button):
+        """Open the mods folder in the system file manager"""
+        try:
+            mods_path = str(self.mods_folder)
+            
+            # Cross-platform folder opening
+            if os.name == 'nt':  # Windows
+                os.startfile(mods_path)
+            elif os.uname().sysname == 'Darwin':  # macOS
+                subprocess.run(['open', mods_path])
+            else:  # Linux
+                subprocess.run(['xdg-open', mods_path])
+                
+        except Exception as e:
+            # Show error dialog if cannot open
+            from gi.repository import Adw
+            error_dialog = Adw.MessageDialog.new(
+                self,
+                "Error",
+                f"Failed to open mods folder: {str(e)}"
+            )
+            error_dialog.add_response("ok", "OK")
+            error_dialog.set_default_response("ok")
+            error_dialog.present()
 
     # ----------------------------
     # BASIC
