@@ -12,7 +12,11 @@ GREEN = \033[0;32m
 YELLOW = \033[0;33m
 NC = \033[0m
 
-.PHONY: setup run clean install uninstall upgrade check dev-install desktop-file update fix-venv
+.PHONY: version setup run clean install uninstall upgrade check dev-install desktop-file update fix-venv
+
+
+version:
+	@echo $(BINARY_VERSION)
 
 setup:
 	@echo -e "$(YELLOW)Setting up virtual environment...$(NC)"
