@@ -9,11 +9,11 @@ permissions:
   contents: write
 
 jobs:
-  build-linux:
+  build:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install system dependencies
@@ -22,14 +22,11 @@ jobs:
           sudo apt install -y \
             python3 \
             python3-pip \
+            python3-venv \
             python3-gi \
             gir1.2-gtk-4.0 \
             gir1.2-adw-1 \
             make
-
-      - name: Install Python packages
-        run: |
-          pip install --user pyinstaller requests appdirs
 
       - name: Get version from Makefile
         id: version
@@ -38,28 +35,30 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
-      - name: Build binary
+      - name: Run full build (binary + AppImage)
         run: |
-          pyinstaller --onefile \
-            --name grassy \
-            --hidden-import=gi \
-            --hidden-import=gi.repository \
-            --add-data "src:src" \
-            src/main.py
+          make release-linux
 
-      - name: Upload artifact
+      - name: Locate AppImage
+        id: artifact
+        run: |
+          APPIMAGE=$(ls release/*.AppImage 2>/dev/null | head -n 1)
+          echo "APPIMAGE=$APPIMAGE" >> $GITHUB_OUTPUT
+          echo "Found: $APPIMAGE"
+
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: grassy-linux
-          path: dist/grassy
+          path: ${{ steps.artifact.outputs.APPIMAGE }}
 
   release:
-    needs: [build-linux]
+    needs: build
     runs-on: ubuntu-22.04
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Get version from Makefile
@@ -69,27 +68,26 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
-      - name: Download Linux artifact
+      - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: grassy-linux
           path: release/
 
-      - name: Make binary executable
+      - name: Find AppImage
+        id: file
         run: |
-          chmod +x release/grassy
+          FILE=$(ls release/*.AppImage | head -n 1)
+          echo "FILE=$FILE" >> $GITHUB_OUTPUT
+          echo "Using: $FILE"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.VERSION }}
           name: Grassy v${{ steps.version.outputs.VERSION }}
-          body: |
-            ## Grassy v${{ steps.version.outputs.VERSION }}
-            
-            See [README](https://github.com/${{ github.repository }}#readme) for installation instructions.
           draft: false
           prerelease: false
           make_latest: true
           files: |
-            release/grassy
+            ${{ steps.file.outputs.FILE }}

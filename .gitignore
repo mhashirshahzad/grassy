@@ -26,3 +26,7 @@ build/
 # Flatpak builds (if using)
 .flatpak-builder/
 build-dir/
+
+# Appimage
+Grassy.AppDir
+release/
