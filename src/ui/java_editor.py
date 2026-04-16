@@ -82,24 +82,38 @@ class JavaEditorWindow(Adw.Window):
         java_path_row.connect("changed", self.on_java_path_changed)
         group.add(java_path_row)
         
-        # Minimum RAM (GB)
+        # Minimum RAM (GB) - Using proper Gtk.Adjustment
+        min_ram_adj = Gtk.Adjustment(
+            value=float(self.java_data.get('min-ram', '1')),
+            lower=0.5,
+            upper=32,
+            step_increment=0.5,
+            page_increment=2
+        )
+        
         min_ram_row = Adw.SpinRow()
         min_ram_row.set_title("Minimum RAM (GB)")
         min_ram_row.set_subtitle("Initial heap size (-Xms)")
-        min_ram_row.set_range(0.5, 32)
-        min_ram_row.set_value(float(self.java_data.get('min-ram', '1')))
+        min_ram_row.set_adjustment(min_ram_adj)
         min_ram_row.set_digits(1)
-        min_ram_row.connect("notify::value", self.on_min_ram_changed)
+        min_ram_adj.connect("value-changed", self.on_min_ram_changed)
         group.add(min_ram_row)
         
-        # Maximum RAM (GB)
+        # Maximum RAM (GB) - Using proper Gtk.Adjustment
+        max_ram_adj = Gtk.Adjustment(
+            value=float(self.java_data.get('max-ram', '2')),
+            lower=0.5,
+            upper=64,
+            step_increment=0.5,
+            page_increment=2
+        )
+        
         max_ram_row = Adw.SpinRow()
         max_ram_row.set_title("Maximum RAM (GB)")
         max_ram_row.set_subtitle("Maximum heap size (-Xmx)")
-        max_ram_row.set_range(0.5, 64)
-        max_ram_row.set_value(float(self.java_data.get('max-ram', '2')))
+        max_ram_row.set_adjustment(max_ram_adj)
         max_ram_row.set_digits(1)
-        max_ram_row.connect("notify::value", self.on_max_ram_changed)
+        max_ram_adj.connect("value-changed", self.on_max_ram_changed)
         group.add(max_ram_row)
         
         self.preferences_page.add(group)
@@ -123,8 +137,8 @@ class JavaEditorWindow(Adw.Window):
         
         # Store references for later updates
         self.java_path_row = java_path_row
-        self.min_ram_row = min_ram_row
-        self.max_ram_row = max_ram_row
+        self.min_ram_adj = min_ram_adj
+        self.max_ram_adj = max_ram_adj
         
         # Update preview initially
         self.update_preview()
@@ -134,14 +148,14 @@ class JavaEditorWindow(Adw.Window):
         self.java_data['java-path'] = entry.get_text()
         self.update_preview()
     
-    def on_min_ram_changed(self, spin_row, *args):
-        """Handle min RAM change"""
-        self.java_data['min-ram'] = str(spin_row.get_value())
+    def on_min_ram_changed(self, adjustment):
+        """Handle min RAM change via Gtk.Adjustment"""
+        self.java_data['min-ram'] = str(adjustment.get_value())
         self.update_preview()
     
-    def on_max_ram_changed(self, spin_row, *args):
-        """Handle max RAM change"""
-        self.java_data['max-ram'] = str(spin_row.get_value())
+    def on_max_ram_changed(self, adjustment):
+        """Handle max RAM change via Gtk.Adjustment"""
+        self.java_data['max-ram'] = str(adjustment.get_value())
         self.update_preview()
     
     def update_preview(self):

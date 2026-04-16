@@ -17,9 +17,7 @@ class ServerEditorWindow(Adw.Window):
         self.set_transient_for(parent)
         self.set_modal(True)
 
-        # store groups + rows
-        self.groups = []  # [(group, [rows...])]
-        self.all_rows = []
+        self.groups = []
 
         self.content = Adw.ToolbarView()
 
@@ -62,7 +60,7 @@ class ServerEditorWindow(Adw.Window):
         self.set_content(self.content)
 
     # ----------------------------
-    # SEARCH (category auto-hide)
+    # SEARCH
     # ----------------------------
     def on_search_changed(self, entry):
         query = entry.get_text().strip().lower()
@@ -77,16 +75,12 @@ class ServerEditorWindow(Adw.Window):
 
             group.set_visible(visible_any or query == "")
 
-    # ----------------------------
-    # helpers
-    # ----------------------------
     def register_group(self, group, rows):
         self.groups.append((group, rows))
 
-    def register_row(self, rows_list, row, title, subtitle="", key=""):
+    def add_row(self, rows, widget, title, subtitle="", key=""):
         blob = f"{title} {subtitle} {key}"
-        rows_list.append((row, blob))
-        self.all_rows.append((row, blob))
+        rows.append((widget, blob))
 
     # ----------------------------
     # LOAD
@@ -110,6 +104,8 @@ class ServerEditorWindow(Adw.Window):
             "server-port": "25565",
             "online-mode": "false",
             "white-list": "false",
+            "view-distance": "10",
+            "player-idle-timeout": "0",
         }
 
         for k, v in defaults.items():
@@ -134,7 +130,7 @@ class ServerEditorWindow(Adw.Window):
 
         self.preferences_page.add(group)
 
-        self.register_row(rows, row, "configure java", "memory allocation and java path", "java")
+        self.add_row(rows, row, "java configure", "memory path", "java")
         self.register_group(group, rows)
 
     def on_java_settings_clicked(self, button):
@@ -151,13 +147,13 @@ class ServerEditorWindow(Adw.Window):
         motd.set_text(self.properties_data["motd"])
         motd.connect("changed", self.on_entry_changed, "motd")
         group.add(motd)
-        self.register_row(rows, motd, "server name motd", "", "motd")
+        self.add_row(rows, motd, "motd server name", "", "motd")
 
         port = Adw.EntryRow(title="Server Port")
         port.set_text(self.properties_data["server-port"])
         port.connect("changed", self.on_entry_changed, "server-port")
         group.add(port)
-        self.register_row(rows, port, "server port", "", "server-port")
+        self.add_row(rows, port, "server port", "", "server-port")
 
         self.preferences_page.add(group)
         self.register_group(group, rows)
@@ -183,7 +179,7 @@ class ServerEditorWindow(Adw.Window):
         difficulty.connect("notify::selected", self.on_difficulty_changed)
         group.add(difficulty)
 
-        self.register_row(rows, difficulty, "difficulty gameplay", "", "difficulty")
+        self.add_row(rows, difficulty, "difficulty gameplay", "", "difficulty")
 
         self.preferences_page.add(group)
         self.register_group(group, rows)
@@ -200,7 +196,7 @@ class ServerEditorWindow(Adw.Window):
         online.connect("notify::active", self.on_switch_changed, "online-mode")
         group.add(online)
 
-        self.register_row(rows, online, "online mode cracked", "", "online-mode")
+        self.add_row(rows, online, "online mode cracked", "", "online-mode")
 
         self.preferences_page.add(group)
         self.register_group(group, rows)
@@ -212,14 +208,25 @@ class ServerEditorWindow(Adw.Window):
         group = Adw.PreferencesGroup(title="Performance")
         rows = []
 
-        view = Adw.SpinRow(title="View Distance")
+        # Create adjustment for view distance
+        view_adj = Gtk.Adjustment(
+            value=int(self.properties_data.get("view-distance", "10")),
+            lower=3,
+            upper=32,
+            step_increment=1,
+            page_increment=10
+        )
+        
+        view = Adw.SpinRow()
+        view.set_title("View Distance")
+        view.set_adjustment(view_adj)
         view.set_range(3, 32)
-        view.set_value(int(self.properties_data.get("view-distance", "10")))
-        view.connect("changed", self.on_spin_changed, "view-distance")
+        
+        # Connect to adjustment's value-changed signal
+        view_adj.connect("value-changed", self.on_adjustment_changed, "view-distance")
+        
         group.add(view)
-
-        self.register_row(rows, view, "view distance performance", "", "view-distance")
-
+        self.add_row(rows, view, "view distance performance", "", "view-distance")
         self.preferences_page.add(group)
         self.register_group(group, rows)
 
@@ -235,7 +242,7 @@ class ServerEditorWindow(Adw.Window):
         wl.connect("notify::active", self.on_switch_changed, "white-list")
         group.add(wl)
 
-        self.register_row(rows, wl, "whitelist security", "", "white-list")
+        self.add_row(rows, wl, "whitelist security", "", "white-list")
 
         self.preferences_page.add(group)
         self.register_group(group, rows)
@@ -247,14 +254,25 @@ class ServerEditorWindow(Adw.Window):
         group = Adw.PreferencesGroup(title="Advanced")
         rows = []
 
-        idle = Adw.SpinRow(title="Idle Timeout")
+        # Create adjustment for idle timeout
+        idle_adj = Gtk.Adjustment(
+            value=int(self.properties_data.get("player-idle-timeout", "0")),
+            lower=0,
+            upper=60,
+            step_increment=1,
+            page_increment=5
+        )
+        
+        idle = Adw.SpinRow()
+        idle.set_title("Idle Timeout (minutes)")
+        idle.set_adjustment(idle_adj)
         idle.set_range(0, 60)
-        idle.set_value(int(self.properties_data.get("player-idle-timeout", "0")))
-        idle.connect("changed", self.on_spin_changed, "player-idle-timeout")
+        
+        # Connect to adjustment's value-changed signal
+        idle_adj.connect("value-changed", self.on_adjustment_changed, "player-idle-timeout")
+        
         group.add(idle)
-
-        self.register_row(rows, idle, "idle timeout advanced", "", "player-idle-timeout")
-
+        self.add_row(rows, idle, "idle timeout advanced", "", "player-idle-timeout")
         self.preferences_page.add(group)
         self.register_group(group, rows)
 
@@ -264,13 +282,14 @@ class ServerEditorWindow(Adw.Window):
     def on_entry_changed(self, entry, key):
         self.properties_data[key] = entry.get_text()
 
-    def on_spin_changed(self, spin, key):
-        self.properties_data[key] = str(int(spin.get_value()))
+    def on_adjustment_changed(self, adjustment, key):
+        """Handle SpinRow value changes via Gtk.Adjustment"""
+        self.properties_data[key] = str(int(adjustment.get_value()))
 
     def on_switch_changed(self, switch, _pspec, key):
         self.properties_data[key] = "true" if switch.get_active() else "false"
 
-    def on_difficulty_changed(self, combo, _):
+    def on_difficulty_changed(self, combo, _pspec):
         self.properties_data["difficulty"] = [
             "peaceful",
             "easy",

@@ -1,4 +1,4 @@
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, Gtk, Gio
 from pathlib import Path
 import os
 import appdirs
@@ -6,6 +6,8 @@ import appdirs
 from ui.settings import SettingsWindow
 from ui.card import ServerCard
 from ui.server_downloader import DownloadsWindow
+from ui.forge_downloader import ForgeDownloaderWindow
+from ui.fabric_downloader import FabricDownloaderWindow
 
 
 class GrassyWindow(Adw.ApplicationWindow):
@@ -50,13 +52,29 @@ class GrassyWindow(Adw.ApplicationWindow):
         self.search_entry.connect("search-changed", self.on_search_changed)
         header.pack_start(self.search_entry)
 
-        # Right side buttons
-        download_button = Gtk.Button.new_from_icon_name("list-add-symbolic")
-        download_button.set_tooltip_text("Download Minecraft server")
-        download_button.add_css_class("suggested-action")
-        download_button.connect("clicked", self.on_download_clicked)
-        header.pack_end(download_button)
+        # Download button with menu
+        self.download_button = Gtk.MenuButton()
+        self.download_button.set_icon_name("list-add-symbolic")
+        self.download_button.set_tooltip_text("Download Minecraft server")
+        self.download_button.add_css_class("suggested-action")
+        
+        # Create actions for the menu
+        self.create_actions()
+        
+        # Set up menu with actions
+        menu_model = Gio.Menu()
+        menu_model.append("Official Minecraft Server", "win.download_official")
+        menu_model.append("Forge (Modded)", "win.download_forge")
+        menu_model.append("Fabric (Modded)", "win.download_fabric")
+        
+        # Create popover
+        popover = Gtk.PopoverMenu()
+        popover.set_menu_model(menu_model)
+        self.download_button.set_popover(popover)
+        
+        header.pack_end(self.download_button)
 
+        # Scan button
         scan_button = Gtk.Button.new_from_icon_name("view-refresh-symbolic")
         scan_button.set_tooltip_text("Scan for servers")
         scan_button.connect("clicked", self.on_scan_clicked)
@@ -70,6 +88,42 @@ class GrassyWindow(Adw.ApplicationWindow):
 
         # load servers
         self.refresh_server_list()
+
+    # -------------------------
+    # ACTIONS
+    # -------------------------
+    
+    def create_actions(self):
+        """Create window actions for download menu"""
+        action_official = Gio.SimpleAction.new("download_official", None)
+        action_official.connect("activate", self.on_download_official)
+        self.add_action(action_official)
+        
+        action_forge = Gio.SimpleAction.new("download_forge", None)
+        action_forge.connect("activate", self.on_download_forge)
+        self.add_action(action_forge)
+        
+        action_fabric = Gio.SimpleAction.new("download_fabric", None)
+        action_fabric.connect("activate", self.on_download_fabric)
+        self.add_action(action_fabric)
+    
+    def on_download_official(self, action, param):
+        """Open official Minecraft downloader"""
+        window = DownloadsWindow(parent=self)
+        window.connect("destroy", lambda d: self.refresh_server_list())
+        window.present()
+    
+    def on_download_forge(self, action, param):
+        """Open Forge downloader"""
+        window = ForgeDownloaderWindow(parent=self)
+        window.connect("destroy", lambda d: self.refresh_server_list())
+        window.present()
+    
+    def on_download_fabric(self, action, param):
+        """Open Fabric downloader"""
+        window = FabricDownloaderWindow(parent=self)
+        window.connect("destroy", lambda d: self.refresh_server_list())
+        window.present()
 
     # -------------------------
     # DATA
@@ -172,6 +226,11 @@ class GrassyWindow(Adw.ApplicationWindow):
         box.append(btn)
 
         self.server_list.append(box)
+    
+    def on_download_clicked(self, button):
+        """Show download menu when empty state button is clicked"""
+        # Open the popover from the download button
+        self.download_button.set_active(True)
 
     # -------------------------
     # HANDLERS
@@ -181,11 +240,6 @@ class GrassyWindow(Adw.ApplicationWindow):
         dialog = SettingsWindow(parent=self)
         dialog.connect("destroy", lambda d: self.refresh_server_list())
         dialog.present()
-
-    def on_download_clicked(self, button):
-        window = DownloadsWindow(parent=self)
-        window.connect("destroy", lambda d: self.refresh_server_list())
-        window.present()
 
     def on_scan_clicked(self, button):
         self.refresh_server_list()
