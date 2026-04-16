@@ -63,6 +63,7 @@ class ServerCard(Adw.PreferencesGroup):
         # Buttons box
         buttons_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         
+  
         # Delete button
         delete_btn = Gtk.Button.new_from_icon_name("user-trash-symbolic")
         delete_btn.set_tooltip_text("Delete Server")
@@ -72,6 +73,14 @@ class ServerCard(Adw.PreferencesGroup):
         delete_btn.connect("clicked", self.on_delete_clicked)
         buttons_box.append(delete_btn)
 
+        # Edit button
+        edit_btn = Gtk.Button.new_from_icon_name("document-edit-symbolic")
+        edit_btn.set_tooltip_text("Edit Server")
+        edit_btn.set_size_request(32, 32)
+        edit_btn.add_css_class("circular")
+        edit_btn.connect("clicked", self.on_edit_clicked)
+        buttons_box.append(edit_btn)
+        
         # Open folder button
         folder_btn = Gtk.Button.new_from_icon_name("folder-open-symbolic")
         folder_btn.set_tooltip_text("Open Server Folder")
@@ -121,6 +130,12 @@ class ServerCard(Adw.PreferencesGroup):
         popup = ServerRunnerWindow(parent=self.get_root(), server_folder=self.server_folder)
         popup.present()
     
+    def on_edit_clicked(self, button):
+        """Show dialog to rename server folder"""
+        from ui.card_editor import ServerRenameWindow
+        rename_dialog = ServerRenameWindow(self.get_root(), self)
+        rename_dialog.present()    
+
     def on_settings_clicked(self, button):
         """Open server properties editor"""
         dialog = ServerEditorWindow(parent=self.get_root(), server_folder=self.server_folder)

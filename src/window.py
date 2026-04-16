@@ -2,9 +2,11 @@ from gi.repository import Adw, Gtk
 from pathlib import Path
 import os
 import appdirs
+
 from ui.settings import SettingsWindow
 from ui.card import ServerCard
-from ui.server_downloader import DownloadsWindow  # Make sure this import is correct
+from ui.server_downloader import DownloadsWindow
+
 
 class GrassyWindow(Adw.ApplicationWindow):
     def __init__(self, **kwargs):
@@ -13,7 +15,10 @@ class GrassyWindow(Adw.ApplicationWindow):
         self.set_title("Grassy")
         self.set_default_size(800, 600)
 
-        # Main content - server list
+        # store cards for filtering
+        self.server_cards = []
+
+        # Main container
         self.server_list = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL,
             spacing=6
@@ -22,138 +27,165 @@ class GrassyWindow(Adw.ApplicationWindow):
         self.server_list.set_margin_bottom(12)
         self.server_list.set_margin_start(12)
         self.server_list.set_margin_end(12)
-        
-        # Scrolled window for server list
+
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_vexpand(True)
         scrolled.set_child(self.server_list)
 
+        # HEADER
         header = Adw.HeaderBar()
         header.set_title_widget(Gtk.Label(label="Grassy - Minecraft Server Manager"))
 
-        # Settings button (left side)
+        # Settings button
         settings_button = Gtk.Button.new_from_icon_name("emblem-system-symbolic")
         settings_button.set_tooltip_text("Settings")
         settings_button.connect("clicked", self.on_settings_clicked)
         header.pack_start(settings_button)
 
-        # Download button (right side) - Plus sign
+        # Search
+        self.search_entry = Gtk.SearchEntry()
+        self.search_entry.set_placeholder_text("Search servers...")
+        self.search_entry.set_width_chars(18)
+        self.search_entry.set_hexpand(True)
+        self.search_entry.connect("search-changed", self.on_search_changed)
+        header.pack_start(self.search_entry)
+
+        # Right side buttons
         download_button = Gtk.Button.new_from_icon_name("list-add-symbolic")
         download_button.set_tooltip_text("Download Minecraft server")
         download_button.add_css_class("suggested-action")
         download_button.connect("clicked", self.on_download_clicked)
         header.pack_end(download_button)
 
-        # Scan button (right side)
         scan_button = Gtk.Button.new_from_icon_name("view-refresh-symbolic")
         scan_button.set_tooltip_text("Scan for servers")
         scan_button.connect("clicked", self.on_scan_clicked)
         header.pack_end(scan_button)
-        
+
         toolbar = Adw.ToolbarView()
         toolbar.add_top_bar(header)
         toolbar.set_content(scrolled)
 
         self.set_content(toolbar)
-        
-        # Load servers on startup
+
+        # load servers
         self.refresh_server_list()
-    
+
+    # -------------------------
+    # DATA
+    # -------------------------
+
     def get_servers_dir(self):
-        """Get servers directory from settings"""
         config_dir = appdirs.user_config_dir("grassy")
         settings_file = os.path.join(config_dir, "settings.txt")
         data_dir = appdirs.user_data_dir("grassy")
         default_dir = os.path.join(data_dir, "servers")
-        
+
         if os.path.exists(settings_file):
             try:
-                with open(settings_file, 'r') as f:
-                    saved_dir = f.read().strip()
-                    if saved_dir:
-                        return saved_dir
+                with open(settings_file, "r") as f:
+                    saved = f.read().strip()
+                    if saved:
+                        return saved
             except:
                 pass
-        
+
         return default_dir
-    
+
+    # -------------------------
+    # SERVER LOADING
+    # -------------------------
+
     def refresh_server_list(self):
-        """Refresh the server list"""
-        # Clear existing list
+        """Load all server cards once"""
+        # clear UI
         for child in list(self.server_list):
             self.server_list.remove(child)
-        
+
+        self.server_cards = []
+
         servers_dir = self.get_servers_dir()
-        
+
         if not os.path.exists(servers_dir):
             os.makedirs(servers_dir, exist_ok=True)
             self.show_empty_state(servers_dir)
             return
-        
-        # Find all directories that contain a server.jar
+
         server_folders = []
+
         for item in Path(servers_dir).iterdir():
-            if item.is_dir():
-                server_jar = item / "server.jar"
-                if server_jar.exists():
-                    server_folders.append(item)
-        
+            if item.is_dir() and (item / "server.jar").exists():
+                server_folders.append(item)
+
         if not server_folders:
             self.show_empty_state(servers_dir)
             return
-        
-        # Create a card for each server folder
-        for i, folder in enumerate(sorted(server_folders)):
-            card = ServerCard(folder, on_server_changed=self.refresh_server_list)
+
+        # create all cards ONCE
+        for folder in sorted(server_folders):
+            card = ServerCard(
+                folder,
+                on_server_changed=self.refresh_server_list
+            )
+
+            self.server_cards.append((folder.name.lower(), card))
             self.server_list.append(card)
-    
-            # Add separator after each card except the last one
-            if i < len(server_folders) - 1:
-                separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-                separator.set_margin_start(12)
-                separator.set_margin_end(12)
-                self.server_list.append(separator)    
+
+    # -------------------------
+    # SEARCH (VISIBILITY ONLY)
+    # -------------------------
+
+    def on_search_changed(self, entry):
+        query = entry.get_text().strip().lower()
+
+        for name, card in self.server_cards:
+            card.set_visible(query in name)
+
+    # -------------------------
+    # EMPTY STATE
+    # -------------------------
 
     def show_empty_state(self, servers_dir):
-        """Show message when no servers found"""
-        info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        info_box.set_halign(Gtk.Align.CENTER)
-        info_box.set_valign(Gtk.Align.CENTER)
-        info_box.set_vexpand(True)
-        
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.set_halign(Gtk.Align.CENTER)
+        box.set_valign(Gtk.Align.CENTER)
+        box.set_vexpand(True)
+
         icon = Gtk.Image.new_from_icon_name("folder-symbolic")
         icon.set_pixel_size(64)
-        info_box.append(icon)
-        
+        box.append(icon)
+
         label = Gtk.Label(label="No servers found")
         label.add_css_class("title-4")
-        info_box.append(label)
-        
-        sublabel = Gtk.Label(label=f"Create a folder in:\n{servers_dir}\nand place server.jar inside it\n\nor click the + button to download a server")
-        sublabel.set_halign(Gtk.Align.CENTER)
-        sublabel.add_css_class("dim-label")
-        info_box.append(sublabel)
-        
-        # Add download button to empty state
-        download_button = Gtk.Button(label="Download Server")
-        download_button.add_css_class("suggested-action")
-        download_button.connect("clicked", self.on_download_clicked)
-        info_box.append(download_button)
-        
-        self.server_list.append(info_box)
-    
+        box.append(label)
+
+        sub = Gtk.Label(
+            label=f"Create folders in:\n{servers_dir}\nwith server.jar inside"
+        )
+        sub.set_halign(Gtk.Align.CENTER)
+        sub.add_css_class("dim-label")
+        box.append(sub)
+
+        btn = Gtk.Button(label="Download Server")
+        btn.add_css_class("suggested-action")
+        btn.connect("clicked", self.on_download_clicked)
+        box.append(btn)
+
+        self.server_list.append(box)
+
+    # -------------------------
+    # HANDLERS
+    # -------------------------
+
     def on_settings_clicked(self, button):
-        """Open settings Window"""
         dialog = SettingsWindow(parent=self)
         dialog.connect("destroy", lambda d: self.refresh_server_list())
         dialog.present()
 
     def on_download_clicked(self, button):
-        """Open Downloads Window"""
         window = DownloadsWindow(parent=self)
         window.connect("destroy", lambda d: self.refresh_server_list())
         window.present()
 
     def on_scan_clicked(self, button):
-        """Manually scan for servers"""
         self.refresh_server_list()
