@@ -1,7 +1,7 @@
 import appdirs
 import os
+import subprocess
 from pathlib import Path
-
 
 def get_servers_dir():
     """Get the servers directory from settings.txt or return default"""
@@ -46,31 +46,68 @@ def save_servers_dir(path):
         return False
 
 def kill_process_on_port(port=25565):
-    """Kill any process using the specified port"""
-    import subprocess
-    import os
     import signal
-    
+    import platform
+
+    system = platform.system()
+
     try:
-        # Find process using the port
-        result = subprocess.run(
-            f"lsof -t -i:{port}",
-            shell=True,
-            capture_output=True,
-            text=True
-        )
-        
-        pids = result.stdout.strip().split()
-        
-        for pid in pids:
-            if pid:
-                try:
+        if system == "Windows":
+            result = subprocess.run(
+                f'netstat -ano | findstr :{port}',
+                shell=True,
+                capture_output=True,
+                text=True
+            )
+
+            pids = set()
+            for line in result.stdout.splitlines():
+                parts = line.split()
+                if len(parts) >= 5:
+                    pids.add(parts[-1])
+
+            for pid in pids:
+                subprocess.run(f'taskkill /PID {pid} /F', shell=True)
+
+            return len(pids)
+
+        else:
+            result = subprocess.run(
+                f"lsof -t -i:{port}",
+                shell=True,
+                capture_output=True,
+                text=True
+            )
+
+            pids = result.stdout.strip().split()
+
+            for pid in pids:
+                if pid:
                     os.kill(int(pid), signal.SIGKILL)
-                    print(f"Killed process {pid} on port {port}")
-                except:
-                    pass
-        
-        return len(pids)
+
+            return len(pids)
+
     except Exception as e:
         print(f"Error killing process on port {port}: {e}")
         return 0
+
+def is_java_installed():
+    try:
+        result = subprocess.run(
+            ["java", "-version"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        return result.returncode == 0
+    except FileNotFoundError:
+        # Try fallback for Windows
+        try:
+            result = subprocess.run(
+                ["where", "java"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                shell=True
+            )
+            return result.returncode == 0
+        except:
+            return False

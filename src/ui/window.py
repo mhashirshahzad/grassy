@@ -11,7 +11,9 @@ from ui.downloader.minecraft import MinecraftDownloaderWindow
 from ui.downloader.forge import ForgeDownloaderWindow
 from ui.downloader.fabric import FabricDownloaderWindow
 from ui.server_runner import ServerRunnerWindow
-from utils import get_servers_dir, save_servers_dir
+
+from utils import get_servers_dir, save_servers_dir, is_java_installed
+
 
 class GrassyWindow(Adw.ApplicationWindow):
     def __init__(self, **kwargs):
@@ -23,7 +25,9 @@ class GrassyWindow(Adw.ApplicationWindow):
         # store cards for filtering
         self.server_cards = []
 
-        # Main container
+        # -------------------------
+        # MAIN LIST
+        # -------------------------
         self.server_list = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL,
             spacing=6
@@ -37,17 +41,17 @@ class GrassyWindow(Adw.ApplicationWindow):
         scrolled.set_vexpand(True)
         scrolled.set_child(self.server_list)
 
+        # -------------------------
         # HEADER
+        # -------------------------
         header = Adw.HeaderBar()
         header.set_title_widget(Gtk.Label(label="Grassy - Minecraft Server Manager"))
 
-        # Settings button
         settings_button = Gtk.Button.new_from_icon_name("emblem-system-symbolic")
         settings_button.set_tooltip_text("Settings")
         settings_button.connect("clicked", self.on_settings_clicked)
         header.pack_start(settings_button)
 
-        # Search
         self.search_entry = Gtk.SearchEntry()
         self.search_entry.set_placeholder_text("Search servers...")
         self.search_entry.set_width_chars(18)
@@ -55,96 +59,124 @@ class GrassyWindow(Adw.ApplicationWindow):
         self.search_entry.connect("search-changed", self.on_search_changed)
         header.pack_start(self.search_entry)
 
-        # Download button with menu
+        # -------------------------
+        # DOWNLOAD MENU
+        # -------------------------
         self.download_button = Gtk.MenuButton()
         self.download_button.set_icon_name("list-add-symbolic")
         self.download_button.set_tooltip_text("Download Minecraft server")
         self.download_button.add_css_class("suggested-action")
-        
-        # Create actions for the menu
+
         self.create_actions()
-        
-        # Set up menu with actions
+
         menu_model = Gio.Menu()
         menu_model.append("Official Minecraft Server", "win.download_official")
         menu_model.append("Forge (Modded)", "win.download_forge")
         menu_model.append("Fabric (Modded)", "win.download_fabric")
-        
-        # Create popover
+
         popover = Gtk.PopoverMenu()
         popover.set_menu_model(menu_model)
         self.download_button.set_popover(popover)
-        
+
         header.pack_end(self.download_button)
 
-        # Scan button
         scan_button = Gtk.Button.new_from_icon_name("view-refresh-symbolic")
         scan_button.set_tooltip_text("Scan for servers")
         scan_button.connect("clicked", self.on_scan_clicked)
         header.pack_end(scan_button)
 
+        # -------------------------
+        # FOOTER (JAVA STATUS)
+        # -------------------------
+        self.java_status = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self.java_status.set_margin_top(6)
+        self.java_status.set_margin_bottom(6)
+        self.java_status.set_margin_start(12)
+        self.java_status.set_margin_end(12)
+        self.java_status.set_halign(Gtk.Align.CENTER)
+
+        # Dot indicator
+        self.java_dot = Gtk.Label()
+        self.java_dot.set_use_markup(True)
+
+        # Text
+        self.java_label = Gtk.Label(label="Checking Java...")
+        self.java_label.add_css_class("heading")  # clean, header-like typography
+
+        self.java_status.append(self.java_dot)
+        self.java_status.append(self.java_label)
+        # -------------------------
+        # LAYOUT
+        # -------------------------
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        main_box.append(scrolled)
+        main_box.append(self.java_status)
+
         toolbar = Adw.ToolbarView()
         toolbar.add_top_bar(header)
-        toolbar.set_content(scrolled)
+        toolbar.set_content(main_box)
 
         self.set_content(toolbar)
 
-        # load servers
+        # -------------------------
+        # INIT
+        # -------------------------
         self.refresh_server_list()
+        self.update_java_status()
 
+    # -------------------------
+    # JAVA STATUS
+    # -------------------------
+    def update_java_status(self):
+        if is_java_installed():
+            self.java_dot.set_markup("<span foreground='green'>●</span>")
+            self.java_label.set_text("Java detected")
+        else:
+            self.java_dot.set_markup("<span foreground='red'>●</span>")
+            self.java_label.set_text("Java not found")
     # -------------------------
     # ACTIONS
     # -------------------------
-    
+
     def create_actions(self):
-        """Create window actions for download menu"""
         action_official = Gio.SimpleAction.new("download_official", None)
         action_official.connect("activate", self.on_download_official)
         self.add_action(action_official)
-        
+
         action_forge = Gio.SimpleAction.new("download_forge", None)
         action_forge.connect("activate", self.on_download_forge)
         self.add_action(action_forge)
-        
+
         action_fabric = Gio.SimpleAction.new("download_fabric", None)
         action_fabric.connect("activate", self.on_download_fabric)
         self.add_action(action_fabric)
-    
+
     def on_download_official(self, action, param):
-        """Open official Minecraft downloader"""
         window = MinecraftDownloaderWindow(parent=self)
         window.connect("destroy", lambda d: self.refresh_server_list())
         window.present()
-    
+
     def on_download_forge(self, action, param):
-        """Open Forge downloader"""
         window = ForgeDownloaderWindow(parent=self)
         window.connect("destroy", lambda d: self.refresh_server_list())
         window.present()
-    
+
     def on_download_fabric(self, action, param):
-        """Open Fabric downloader"""
         window = FabricDownloaderWindow(parent=self)
         window.connect("destroy", lambda d: self.refresh_server_list())
         window.present()
 
     # -------------------------
-    # DATA
-    # -------------------------
-   # -------------------------
     # SERVER LOADING
     # -------------------------
 
     def refresh_server_list(self):
-        """Load all server cards once"""
-        # clear UI
         for child in list(self.server_list):
             self.server_list.remove(child)
 
         self.server_cards = []
 
         servers_dir = get_servers_dir()
-        
 
         if not os.path.exists(servers_dir):
             os.makedirs(servers_dir, exist_ok=True)
@@ -161,7 +193,6 @@ class GrassyWindow(Adw.ApplicationWindow):
             self.show_empty_state(servers_dir)
             return
 
-        # create all cards ONCE
         for folder in sorted(server_folders):
             card = ServerCard(
                 folder,
@@ -172,7 +203,7 @@ class GrassyWindow(Adw.ApplicationWindow):
             self.server_list.append(card)
 
     # -------------------------
-    # SEARCH (VISIBILITY ONLY)
+    # SEARCH
     # -------------------------
 
     def on_search_changed(self, entry):
@@ -212,10 +243,8 @@ class GrassyWindow(Adw.ApplicationWindow):
         box.append(btn)
 
         self.server_list.append(box)
-    
+
     def on_download_clicked(self, button):
-        """Show download menu when empty state button is clicked"""
-        # Open the popover from the download button
         self.download_button.set_active(True)
 
     # -------------------------
@@ -229,4 +258,4 @@ class GrassyWindow(Adw.ApplicationWindow):
 
     def on_scan_clicked(self, button):
         self.refresh_server_list()
-
+        self.update_java_status()
