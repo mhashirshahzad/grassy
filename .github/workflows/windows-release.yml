@@ -4,7 +4,10 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:   # Allows manual trigger from Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: write      # Required for creating releases
 
 jobs:
   build-windows:
@@ -24,9 +27,9 @@ jobs:
         run: |
           bash ./windows/build.sh
 
-      - name: Create portable ZIP archive
+      - name: Create portable ZIP archive (onedir)
         run: |
-          powershell Compress-Archive -Path src\dist\grassy.exe -DestinationPath grassy-windows-portable-amd64.zip
+          powershell Compress-Archive -Path src\dist\grassy\* -DestinationPath grassy-windows-portable-amd64.zip
 
       - name: Upload artifact (ZIP)
         uses: actions/upload-artifact@v4
