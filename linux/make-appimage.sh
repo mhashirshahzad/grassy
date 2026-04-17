@@ -1,111 +1,159 @@
 #!/bin/sh
 set -eu
 
+# --- Configuration ---
+BINARY_NAME="grassy"
+RELEASE_DIR="release"
+APPDIR="$RELEASE_DIR/Grassy.AppDir"
+BUILD_DIR="$RELEASE_DIR/build"
+DIST_DIR="$RELEASE_DIR/dist"
+
+# --- Versioning ---
+if [ -f "version.txt" ]; then
+    BINARY_VERSION=$(cat version.txt | tr -d '\n\r')
+else
+    BINARY_VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
+fi
+
 ARCH=$(uname -m)
-if git describe --tags --always 2>/dev/null; then
-    VERSION=$(git describe --tags --always)
-else
-    VERSION="dev"
-fi
-export ARCH VERSION
-export OUTPATH=./dist
-export ADD_HOOKS="self-updater.hook"
-export UPINFO="gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}|latest|*$ARCH.AppImage.zsync"
+export ARCH VERSION=$BINARY_VERSION
+export OUTPATH="./dist"
 
-# --- Required metadata ---
+# --- Metadata (Your actual file locations) ---
 export ICON="$(pwd)/assets/icon.png"
-export DESKTOP="$(pwd)/assets/grassy.desktop"
+export DESKTOP="$(pwd)/grassy.desktop"
 
-# Check if files exist
+echo -e "\033[0;33m🔨 Building Grassy v$BINARY_VERSION AppImage (using sharun)...\033[0m"
+
+# Verify required files exist
 if [ ! -f "$ICON" ]; then
-    echo "ERROR: Icon not found at $ICON"
+    echo -e "\033[0;31m❌ Icon not found at $ICON\033[0m"
     exit 1
 fi
+
 if [ ! -f "$DESKTOP" ]; then
-    echo "ERROR: Desktop file not found at $DESKTOP"
-    exit 1
-fi
-if [ ! -f "./src/main.py" ]; then
-    echo "ERROR: src/main.py not found"
+    echo -e "\033[0;31m❌ Desktop file not found at $DESKTOP\033[0m"
     exit 1
 fi
 
-# --- Deployment options ---
-export DEPLOY_PYTHON=1
-export DEPLOY_GTK=1
-export GTK_DIR=gtk-4.0
-export DEPLOY_LOCALE=1
-export STARTUPWMCLASS=io.github.yourusername.grassy
-export GTK_CLASS_FIX=1
+# --- Step 1: Create virtual environment and install dependencies ---
+echo -e "\033[0;33m📦 Setting up Python environment...\033[0m"
 
-# --- Create AppDir structure ---
-mkdir -p ./AppDir/usr/bin
-mkdir -p ./AppDir/usr/share/applications
-mkdir -p ./AppDir/usr/share/icons/hicolor/256x256/apps
+# Use a temporary venv in the build directory
+VENV_DIR="$BUILD_DIR/venv"
+python3 -m venv "$VENV_DIR" --clear
+"$VENV_DIR/bin/pip" install --upgrade pip
+"$VENV_DIR/bin/pip" install -r requirements.txt
 
-# Copy icon and desktop file
-cp "$ICON" ./AppDir/usr/share/icons/hicolor/256x256/apps/grassy.png
-cp "$ICON" ./AppDir/icon.png
-cp "$ICON" ./AppDir/.DirIcon
-cp "$DESKTOP" ./AppDir/usr/share/applications/
-cp "$DESKTOP" ./AppDir/grassy.desktop
+# Install PyInstaller
+"$VENV_DIR/bin/pip" install pyinstaller
 
-# Copy your Python script from src/main.py
-cp ./src/main.py ./AppDir/usr/bin/grassy
-chmod +x ./AppDir/usr/bin/grassy
+# --- Step 2: Build with PyInstaller ---
+echo -e "\033[0;33m📦 Building PyInstaller bundle...\033[0m"
 
-# If you have other Python modules in src/, copy them too
-if [ -d "./src/grassy" ]; then
-    cp -r ./src/grassy ./AppDir/usr/lib/
-fi
+"$VENV_DIR/bin/python" -m PyInstaller \
+    --name "$BINARY_NAME" \
+    --onedir \
+    --windowed \
+    --distpath "$DIST_DIR" \
+    --workpath "$BUILD_DIR/pyinstaller" \
+    --specpath "$BUILD_DIR" \
+    --hidden-import=gi \
+    --hidden-import=gi.repository.Gtk \
+    --hidden-import=gi.repository.Adw \
+    --hidden-import=requests \
+    --hidden-import=appdirs \
+    src/main.py
 
-# --- Bundle dependencies with quick-sharun ---
-# These paths work on Ubuntu 22.04/24.04 (GitHub Actions runner)
-quick-sharun /usr/bin/python3 \
-             /usr/lib/python3/dist-packages/gi \
-             /usr/lib/python3/dist-packages/requests \
-             /usr/lib/python3/dist-packages/appdirs \
-             /usr/lib/x86_64-linux-gnu/libgobject-2.0* \
-             /usr/lib/x86_64-linux-gnu/libglib-2.0* \
-             /usr/lib/x86_64-linux-gnu/libgtk-4* \
-             /usr/lib/x86_64-linux-gnu/libadwaita-1* \
-             /usr/lib/x86_64-linux-gnu/girepository-1.0 \
-             /usr/lib/x86_64-linux-gnu/girepository-1.0/Gio-2.0.typelib \
-             /usr/lib/x86_64-linux-gnu/girepository-1.0/Gtk-4.0.typelib \
-             /usr/lib/x86_64-linux-gnu/girepository-1.0/Adw-1.0.typelib \
-             ./AppDir/usr/bin/grassy
+# --- Step 3: Prepare AppDir structure ---
+echo -e "\033[0;33m📁 Creating AppDir structure...\033[0m"
 
-# --- Create AppRun wrapper ---
-cat > ./AppDir/AppRun << 'EOF'
-#!/bin/sh
+rm -rf "$APPDIR"
+mkdir -p "$APPDIR/usr/bin"
+mkdir -p "$APPDIR/usr/share/applications"
+mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
+
+# Copy PyInstaller bundle
+cp -r "$DIST_DIR/$BINARY_NAME"/* "$APPDIR/usr/bin/"
+
+# Copy desktop file (fixed path - no assets/ subdirectory)
+cp "$DESKTOP" "$APPDIR/grassy.desktop"
+cp "$DESKTOP" "$APPDIR/usr/share/applications/"
+
+# Copy icon to all required locations
+cp "$ICON" "$APPDIR/grassy.png"
+cp "$ICON" "$APPDIR/usr/share/icons/hicolor/256x256/apps/grassy.png"
+cp "$ICON" "$APPDIR/.DirIcon"
+
+# --- Step 4: Create AppRun wrapper ---
+echo -e "\033[0;33m🚀 Creating AppRun wrapper...\033[0m"
+
+cat > "$APPDIR/AppRun" << 'EOF'
+#!/bin/bash
 HERE="$(dirname "$(readlink -f "$0")")"
-export PATH="${HERE}/usr/bin:${PATH}"
-export PYTHONPATH="${HERE}/usr/lib/python3/dist-packages:${PYTHONPATH:-}"
-export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH:-}"
-export GI_TYPELIB_PATH="${HERE}/usr/lib/girepository-1.0:${GI_TYPELIB_PATH:-}"
+export PATH="$HERE/usr/bin:$PATH"
+export LD_LIBRARY_PATH="$HERE/usr/lib:$LD_LIBRARY_PATH"
+export GI_TYPELIB_PATH="$HERE/usr/lib/girepository-1.0:$GI_TYPELIB_PATH"
+export PYTHONPATH="$HERE/usr/lib/python3/dist-packages:$HERE/usr/lib/python3.12/site-packages"
 
-# Run the application
-exec "${HERE}/usr/bin/python3" "${HERE}/usr/bin/grassy" "$@"
+# Execute the binary built by PyInstaller
+exec "$HERE/usr/bin/grassy" "$@"
 EOF
-chmod +x ./AppDir/AppRun
+chmod +x "$APPDIR/AppRun"
 
-# --- Build the AppImage ---
-quick-sharun --make-appimage
+# --- Step 5: Bundle dependencies with quick-sharun ---
+echo -e "\033[0;33m📚 Bundling dependencies with quick-sharun...\033[0m"
 
-# --- Move to dist directory ---
-mkdir -p dist
-mv *.AppImage* dist/ 2>/dev/null || true
-
-# --- Test the AppImage ---
-if ls ./dist/*.AppImage 1>/dev/null 2>&1; then
-    echo "✅ AppImage built successfully!"
-    ls -la ./dist/
-    
-    # Optional: test it
-    if command -v quick-sharun &> /dev/null; then
-        quick-sharun --test ./dist/*.AppImage
-    fi
+# Check if quick-sharun is available
+if ! command -v quick-sharun >/dev/null 2>&1; then
+    echo -e "\033[0;33m⚠️  quick-sharun not found. Installing locally...\033[0m"
+    wget -O quick-sharun https://github.com/VHSgunzo/sharun/releases/latest/download/quick-sharun-x86_64.AppImage
+    chmod +x quick-sharun
+    QUICK_SHARUN="./quick-sharun"
 else
-    echo "❌ Failed to build AppImage"
+    QUICK_SHARUN="quick-sharun"
+fi
+
+# Run quick-sharun on the main binary
+if [ -f "$APPDIR/usr/bin/grassy" ]; then
+    $QUICK_SHARUN "$APPDIR/usr/bin/grassy"
+    echo -e "\033[0;32m✅ Dependencies bundled\033[0m"
+else
+    echo -e "\033[0;31m❌ Binary not found at $APPDIR/usr/bin/grassy\033[0m"
     exit 1
 fi
+
+# --- Step 6: Generate the final AppImage ---
+echo -e "\033[0;33m📀 Creating AppImage...\033[0m"
+
+# Build the AppImage
+$QUICK_SHARUN --make-appimage
+
+# --- Step 7: Organize output ---
+mkdir -p "$RELEASE_DIR"
+
+# Find and rename the AppImage
+if ls *.AppImage 1>/dev/null 2>&1; then
+    for appimage in *.AppImage; do
+        # Rename to match versioning scheme
+        FINAL_NAME="${BINARY_NAME}-${BINARY_VERSION}-${ARCH}.AppImage"
+        mv "$appimage" "$RELEASE_DIR/$FINAL_NAME"
+        echo -e "\033[0;32m✅ AppImage created: $RELEASE_DIR/$FINAL_NAME\033[0m"
+        ls -lh "$RELEASE_DIR/$FINAL_NAME"
+    done
+else
+    echo -e "\033[0;31m❌ Failed to create AppImage\033[0m"
+    exit 1
+fi
+
+# Also handle zsync file if exists
+if ls *.zsync 1>/dev/null 2>&1; then
+    mv *.zsync "$RELEASE_DIR/" 2>/dev/null || true
+fi
+
+# --- Step 8: Cleanup build artifacts (optional) ---
+echo -e "\033[0;33m🧹 Cleaning up...\033[0m"
+rm -rf "$BUILD_DIR" 2>/dev/null || true
+rm -rf "$APPDIR" 2>/dev/null || true
+
+echo -e "\033[0;32m✅ Build complete! AppImage is in $RELEASE_DIR/\033[0m"
