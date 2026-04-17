@@ -1,0 +1,67 @@
+
+name: Build and Release AppImage Binary
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write      # Required to create GitHub Releases
+
+jobs:
+  build:
+    name: Build AppImage (${{ matrix.arch }})
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runs-on: ubuntu-latest
+            arch: x86_64
+          # Optional: enable aarch64 builds if you have an ARM runner available
+          # - runs-on: ubuntu-24.04-arm
+          #   arch: aarch64
+    container: ghcr.io/pkgforge-dev/archlinux:latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Prepare container (install basic tools)
+        uses: pkgforge-dev/anylinux-setup-action@v2
+
+      - name: Install dependencies (get-dependencies.sh)
+        run: bash ./linux/get-dependencies.sh
+
+      - name: Build AppImage (make-appimage.sh)
+        run: bash ./linux/make-appimage.sh
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AppImage-${{ matrix.arch }}
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all AppImage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: AppImage-*
+          merge-multiple: true
+          path: artifacts
+
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
