@@ -1,0 +1,46 @@
+name: Build and Release Windows Binary
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up MSYS2 (UCRT64)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+
+      - name: Run build script in MSYS2 shell
+        shell: msys2 {0}
+        run: |
+          bash ./windows/build.sh
+
+      - name: Create portable ZIP archive
+        run: |
+          powershell Compress-Archive -Path src\dist\grassy\* -DestinationPath grassy-windows-portable-amd64.zip
+
+      - name: Upload artifact (ZIP)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Grassy-Windows-Portable
+          path: grassy-windows-portable-amd64.zip
+          compression-level: 9
+
+      - name: Create GitHub Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            grassy-windows-portable-amd64.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
