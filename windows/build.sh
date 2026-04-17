@@ -23,7 +23,11 @@ pip install --upgrade pip
 pip install -r ../requirements.txt
 
 echo " - Building Windows executable with PyInstaller..."
-pyinstaller grassy.spec
+pyinstaller --noconfirm --clean \
+  --collect-all gi \
+  --collect-all gtk \
+  --collect-all adw \
+  grassy.spec
 
 echo " - Build complete."
 echo " - Executable: src/dist/grassy.exe"

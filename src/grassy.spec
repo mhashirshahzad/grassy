@@ -42,3 +42,12 @@ coll = COLLECT(
     upx_exclude=[],
     name='grassy',
 )
+
+hiddenimports=[
+    'gi',
+    'gi.repository',
+    'gi.repository.Gtk',
+    'gi.repository.Adw',
+    'gi.repository.Gio',
+    'gi.repository.GObject',
+]
