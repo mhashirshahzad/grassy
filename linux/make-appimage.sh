@@ -104,11 +104,12 @@ echo "📀 Building AppImage..."
 "$APPIMAGETOOL" \
     --appimage-extract-and-run \
     --comp zstd \
-    --mksquashfs-opt "-Xcompression-level 6" \
-    --mksquashfs-opt "-b 131072" \
+    --mksquashfs-opt -Xcompression-level \
+    --mksquashfs-opt 6 \
+    --mksquashfs-opt -b \
+    --mksquashfs-opt 131072 \
     "$APPDIR" \
     "$FINAL_NAME"
-
 # --- Output ---
 mkdir -p "$RELEASE_DIR"
 
