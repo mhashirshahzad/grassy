@@ -28,10 +28,14 @@ jobs:
         run: |
           bash ./windows/build.sh
 
+      - name: Debug dist output
+        run: |
+          dir dist
+
       - name: Create portable ZIP archive (7-Zip, POSIX-safe)
         run: |
           cd dist
-          7z a -tzip ..\..\grassy-windows-portable-amd64.zip grassy
+          7z a -tzip ..\grassy-windows-portable-amd64.zip main
 
       - name: Upload artifact (ZIP)
         uses: actions/upload-artifact@v4

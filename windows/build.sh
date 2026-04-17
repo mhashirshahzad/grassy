@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 shopt -s extglob
 
 echo " - Installing MSYS2 dependencies..."
@@ -21,9 +22,10 @@ pacman -S --noconfirm --needed \
 echo " - Upgrading pip..."
 python -m pip install --upgrade pip
 
-echo " - Installing Python packages..."
+echo " - Installing Python dependencies..."
 pip install -r requirements.txt
 
-echo " - Building Windows executable with PyInstaller..."
+echo " - Building Windows executable..."
 pyinstaller windows/grassy.spec
+
 echo " - Build complete."
