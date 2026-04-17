@@ -19,8 +19,7 @@ pacman -Sy --noconfirm \
     file \
     binutils \
     fuse3 \
-    # Additional deps for AppImage
-    libfuse2 \
+    fuse2 \
     desktop-file-utils \
     libappimage
 
