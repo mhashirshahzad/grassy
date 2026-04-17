@@ -1,27 +1,34 @@
 import os
+import sys
 
+
+WINDOWS = sys.platform == "win32"
 
 class CommandHandler:
     def __init__(self, window):
         self.window = window
     
     def send_command(self, command):
-        """Send a command to the server via PTY"""
-        if not self.window.process or self.window.pty_master is None:
-            self.window.append_console("Server is not running\n")
-            return False
+            """Send a command to the server"""
+            if not self.window.process:
+                self.window.append_console("Server is not running\n")
+                return False
         
-        try:
-            # Write directly to PTY (this replaces screen)
-            os.write(self.window.pty_master, (command + "\n").encode())
+            try:
+                if WINDOWS:
+                    self.window.process.stdin.write(command + "\n")
+                    self.window.process.stdin.flush()
+                else:
+                    if self.window.pty_master is None:
+                        self.window.append_console("Server is not running\n")
+                        return False
+                    os.write(self.window.pty_master, (command + "\n").encode())
 
-            # Echo command in console UI
-            self.window.append_console(f"> {command}\n")
-            return True
-
-        except Exception as e:
-            self.window.append_console(f"Failed to send command: {e}\n")
-            return False
+                self.window.append_console(f"> {command}\n")
+                return True
+            except Exception as e:
+                self.window.append_console(f"Failed to send command: {e}\n")
+                return False
     
     def kick_player(self, player_name, reason="No reason"):
         return self.send_command(f"kick {player_name} {reason}")

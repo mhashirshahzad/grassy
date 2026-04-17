@@ -2,7 +2,8 @@ from gi.repository import Adw, Gtk, GLib
 import subprocess
 import threading
 import os
-import pty
+import sys
+import re
 from pathlib import Path
 
 from .commands import CommandHandler
@@ -10,6 +11,8 @@ from .console import ConsoleHandler
 from .widgets.console_view import ConsoleView
 from .widgets.input_box import CommandInputBox
 from .widgets.player_panel import PlayerPanel
+
+WINDOWS = sys.platform == "win32"
 
 
 class ServerRunnerWindow(Adw.Window):
@@ -35,7 +38,6 @@ class ServerRunnerWindow(Adw.Window):
         self.start_server()
 
     def on_window_destroy(self, widget):
-        """Kill server if user closes window manually"""
         if self.process:
             try:
                 self.process.terminate()
@@ -88,19 +90,31 @@ class ServerRunnerWindow(Adw.Window):
         cmd = ["java", "-Xms2G", "-Xmx4G", "-jar", str(server_jar), "nogui"]
 
         try:
-            master_fd, slave_fd = pty.openpty()
-            self.pty_master = master_fd
+            if WINDOWS:
+                self.process = subprocess.Popen(
+                    cmd,
+                    cwd=str(self.server_folder),
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                )
+            else:
+                import pty
+                master_fd, slave_fd = pty.openpty()
+                self.pty_master = master_fd
 
-            self.process = subprocess.Popen(
-                cmd,
-                cwd=str(self.server_folder),
-                stdin=slave_fd,
-                stdout=slave_fd,
-                stderr=slave_fd,
-                close_fds=True
-            )
-
-            os.close(slave_fd)
+                self.process = subprocess.Popen(
+                    cmd,
+                    cwd=str(self.server_folder),
+                    stdin=slave_fd,
+                    stdout=slave_fd,
+                    stderr=slave_fd,
+                    close_fds=True
+                )
+                os.close(slave_fd)
 
             self.append_console(f"Running: {' '.join(cmd)}\n")
             self.append_console("Server started\n")
@@ -115,7 +129,6 @@ class ServerRunnerWindow(Adw.Window):
             self.append_console(f"Error starting server: {e}\n")
 
     def stop_server(self, button=None):
-        """Gracefully stop server"""
         if not self.process:
             self.append_console("No server running\n")
             return
@@ -127,14 +140,31 @@ class ServerRunnerWindow(Adw.Window):
         except Exception as e:
             self.append_console(f"Stop failed: {e}\n")
 
-    def read_output(self):
-        """Read PTY output"""
+    def send_command(self, command):
+        """Send a command to the server process"""
+        if not self.process:
+            return
+
         try:
-            while True:
-                data = os.read(self.pty_master, 1024).decode(errors="ignore")
-                if not data:
-                    break
-                GLib.idle_add(self.parse_output, data)
+            if WINDOWS:
+                self.process.stdin.write(command + "\n")
+                self.process.stdin.flush()
+            else:
+                os.write(self.pty_master, (command + "\n").encode())
+        except Exception as e:
+            self.append_console(f"Command error: {e}\n")
+
+    def read_output(self):
+        try:
+            if WINDOWS:
+                for line in self.process.stdout:
+                    GLib.idle_add(self.parse_output, line)
+            else:
+                while True:
+                    data = os.read(self.pty_master, 1024).decode(errors="ignore")
+                    if not data:
+                        break
+                    GLib.idle_add(self.parse_output, data)
 
         except Exception as e:
             GLib.idle_add(self.append_console, f"Read error: {e}\n")
@@ -143,31 +173,25 @@ class ServerRunnerWindow(Adw.Window):
             GLib.idle_add(self.on_server_stopped)
 
     def on_server_stopped(self):
-        """Called when server exits"""
         self.append_console("Server stopped\n")
         self.process = None
-
-        # Close window after slight delay
         GLib.timeout_add(400, self.destroy)
 
     def parse_output(self, text):
         self.append_console(text)
 
         for line in text.splitlines():
-            if "joined the game" in line:
-                import re
-                m = re.search(r'(\w+) joined the game', line)
-                if m:
-                    self.player_panel.add_player(m.group(1))
+            m = re.search(r'(\w+) joined the game', line)
+            if m:
+                self.player_panel.add_player(m.group(1))
+                continue
 
-            elif "left the game" in line:
-                import re
-                m = re.search(r'(\w+) left the game', line)
-                if m:
-                    self.player_panel.remove_player(m.group(1))
+            m = re.search(r'(\w+) left the game', line)
+            if m:
+                self.player_panel.remove_player(m.group(1))
+                continue
 
-            elif "online:" in line.lower():
-                import re
+            if "online:" in line.lower():
                 m = re.search(r'online:\s*(.*)', line, re.IGNORECASE)
                 if m:
                     players = [p.strip() for p in m.group(1).split(',') if p.strip()]
