@@ -1,28 +1,23 @@
-#!/bin/bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
-echo "📦 Installing Ubuntu build dependencies..."
+echo "📦 installing minimal arch build deps..."
 
-export DEBIAN_FRONTEND=noninteractive
-
-apt update
-
-apt install -y \
-    python3 \
-    python3-venv \
-    python3-pip \
-    python3-gi \
-    gir1.2-gtk-4.0 \
-    libadwaita-1-0 \
-    libglib2.0-0 \
-    libcairo2 \
+pacman -sy --noconfirm \
+    python \
+    python-pip \
+    python-requests \
+    python-appdirs \
+    python-gobject \
+    gtk4 \
+    libadwaita \
     gobject-introspection \
-    pkg-config \
-    build-essential \
+    glib2 \
+    base-devel \
     git \
     wget \
     file \
     binutils \
     fuse3
 
-echo "✅ Ubuntu dependencies installed!"
+echo "✅ done"

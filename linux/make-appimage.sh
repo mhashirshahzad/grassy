@@ -1,112 +1,53 @@
 #!/bin/bash
 set -euo pipefail
 
-# --- configuration ---
-binary_name="grassy"
-release_dir="release"
-appdir="$release_dir/grassy.appdir"
-build_dir="$release_dir/build"
-dist_dir="$release_dir/dist"
+BINARY_NAME="grassy"
+RELEASE_DIR="release"
+APPDIR="$RELEASE_DIR/AppDir"
+BUILD_DIR="$RELEASE_DIR/build"
+DIST_DIR="$RELEASE_DIR/dist"
 
-arch=$(uname -m)
-final_name="${binary_name}-${arch}.appimage"
+APPIMAGETOOL="./appimagetool-x86_64.AppImage"
 
-icon="$(pwd)/assets/icon.png"
-desktop="$(pwd)/assets/grassy.desktop"
-appimagetool="$(pwd)/appimagetool-x86_64.appimage"
+echo "🔨 Minimal AppImage build..."
 
-echo "🔨 building grassy appimage (gtk system-runtime mode)..."
+# --- setup venv ---
+python -m venv "$BUILD_DIR/venv"
+"$BUILD_DIR/venv/bin/pip" install --upgrade pip
+"$BUILD_DIR/venv/bin/pip" install pyinstaller -r requirements.txt
 
-# --- validate assets ---
-[ -f "$icon" ] || { echo "❌ missing icon"; exit 1; }
-[ -f "$desktop" ] || { echo "❌ missing desktop file"; exit 1; }
-
-# --- fetch appimagetool ---
-if [ ! -f "$appimagetool" ]; then
-    echo "⬇️ downloading appimagetool..."
-    wget -q -o "$appimagetool" \
-        https://github.com/appimage/appimagekit/releases/download/continuous/appimagetool-x86_64.appimage
-    chmod +x "$appimagetool"
-fi
-
-# --- python environment ---
-echo "📦 setting up python..."
-venv_dir="$build_dir/venv"
-python3 -m venv "$venv_dir" --clear
-"$venv_dir/bin/pip" install --upgrade pip
-
-# important: do not install pygobject via pip
-"$venv_dir/bin/pip" install -r requirements.txt pyinstaller
-
-# --- build with pyinstaller ---
-echo "⚙️ building binary..."
-"$venv_dir/bin/python" -m pyinstaller \
-    --name "$binary_name" \
+# --- PyInstaller build ---
+"$BUILD_DIR/venv/bin/python" -m PyInstaller \
+    --name "$BINARY_NAME" \
     --onedir \
     --windowed \
-    --distpath "$dist_dir" \
-    --workpath "$build_dir/pyinstaller" \
-    --specpath "$build_dir" \
-    --hidden-import=gi \
-    --hidden-import=gi.repository.gtk \
-    --hidden-import=gi.repository.adw \
-    --hidden-import=gi.repository.glib \
-    --hidden-import=requests \
-    --hidden-import=appdirs \
+    --distpath "$DIST_DIR" \
+    --workpath "$BUILD_DIR/pyi" \
+    --specpath "$BUILD_DIR" \
     src/main.py
 
-# --- appdir structure ---
-echo "📁 creating appdir..."
-rm -rf "$appdir"
+# --- AppDir ---
+rm -rf "$APPDIR"
+mkdir -p "$APPDIR/usr/bin"
 
-mkdir -p "$appdir/usr/bin"
-mkdir -p "$appdir/usr/share/applications"
-mkdir -p "$appdir/usr/share/icons/hicolor/256x256/apps"
-
-# copy pyinstaller bundle
-cp -r "$dist_dir/$binary_name"/* "$appdir/usr/bin/"
+cp -r "$DIST_DIR/$BINARY_NAME/"* "$APPDIR/usr/bin/"
 
 # --- desktop + icon ---
-cp "$desktop" "$appdir/grassy.desktop"
-cp "$desktop" "$appdir/usr/share/applications/"
+cp assets/grassy.desktop "$APPDIR/"
+cp assets/icon.png "$APPDIR/.DirIcon"
 
-cp "$icon" "$appdir/grassy.png"
-cp "$icon" "$appdir/.diricon"
-cp "$icon" "$appdir/usr/share/icons/hicolor/256x256/apps/grassy.png"
-
-# --- apprun ---
-echo "🚀 creating apprun..."
-cat > "$appdir/apprun" << 'eof'
+# --- AppRun (minimal) ---
+cat > "$APPDIR/AppRun" << 'EOF'
 #!/bin/bash
-here="$(dirname "$(readlink -f "$0")")"
+HERE="$(dirname "$(readlink -f "$0")")"
+exec "$HERE/usr/bin/grassy" "$@"
+EOF
 
-export path="$here/usr/bin:$path"
+chmod +x "$APPDIR/AppRun"
 
-exec "$here/usr/bin/grassy" "$@"
-eof
+# --- build AppImage ---
+chmod +x "$APPIMAGETOOL"
 
-chmod +x "$appdir/apprun"
+"$APPIMAGETOOL" --appimage-extract-and-run "$APPDIR" "$RELEASE_DIR/grassy-x86_64.AppImage"
 
-# --- build appimage (no fuse required) ---
-echo "📀 building appimage..."
-"$appimagetool" \
-    --appimage-extract-and-run \
-    "$appdir" \
-    "$final_name"
-
-# --- output ---
-mkdir -p "$release_dir"
-
-if [ -f "$final_name" ]; then
-    mv "$final_name" "$release_dir/"
-    echo "✅ created: $release_dir/$final_name"
-else
-    echo "❌ appimage build failed"
-    exit 1
-fi
-
-# --- cleanup ---
-echo "🧹 cleaning..."
-rm -rf "$build_dir" "$appdir"
-
-echo "🎉 done."
+echo "✅ Done: release/grassy-x86_64.AppImage"
