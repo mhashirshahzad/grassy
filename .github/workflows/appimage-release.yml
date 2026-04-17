@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies (Ubuntu)
-        run: bash ./linux/get-dependencies-ubuntu.sh
+        run: bash ./linux/get-dependencies.sh
 
       - name: Build AppImage
         run: bash ./linux/make-appimage.sh
