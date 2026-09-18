@@ -1,6 +1,10 @@
 # Grassy
  A beautiful and easy-to-use Minecraft server manager built with Python and GTK4/libadwaita.
 
+> [!WARNING]
+> This code is being rewritten in rust, [rust-version](https://github.com/mhashirshahzad/grassy-rust)
+> This is the original code.
+
 <p align="center">
   <img src="assets/icon.png" width="200" />
 </p>
